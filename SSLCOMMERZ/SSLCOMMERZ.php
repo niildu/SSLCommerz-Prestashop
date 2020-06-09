@@ -82,7 +82,7 @@ class SSLCOMMERZ extends PaymentModule
     public function install()
     {
         Configuration::updateValue(self::FLAG_DISPLAY_PAYMENT_INVITE, true);
-        if (!parent::install() || !$this->registerHook('paymentReturn') || !$this->registerHook('paymentOptions')) {
+        if (!parent::install() || !$this->registerHook('paymentReturn') || !$this->registerHook('paymentOptions') || !$this->registerHook('actionFrontControllerSetMedia')) {
             return false;
         }
         return true;
@@ -134,6 +134,12 @@ class SSLCOMMERZ extends PaymentModule
         return $this->display(__FILE__, 'infos.tpl');
     }
 
+    public function hookActionFrontControllerSetMedia($params)
+    {
+        // On every pages
+        $this->context->controller->registerJavascript('sslcommerz','modules/'.$this->name.'/js/lib/sslcommerz.js',['position' => 'bottom','priority' => 10,]);
+    }
+       
     public function getContent()
     {
         if (Tools::isSubmit('btnSubmit')) {
@@ -172,23 +178,28 @@ class SSLCOMMERZ extends PaymentModule
             return;
         }
 
-        // $this->smarty->assign(
-        //     $this->getTemplateVarInfos()
-        // );
+        $this->smarty->assign(
+            $this->getTemplateVars()
+        );
 
         $newOption = new PaymentOption();
         $newOption->setModuleName($this->name)
                 ->setCallToActionText($this->trans(Configuration::get('SSLCOMMERZ_TITLE'), array(), 'Modules.SSLCOMMERZ.Shop'))
-                // ->setAction($this->context->link->getModuleLink($this->name, 'validation', array(), true))
                 ->setAction($this->context->link->getModuleLink($this->name, 'request', array(), true))
-                ->setAdditionalInformation($this->trans(Configuration::get('SSLCOMMERZ_DETAILS')));
-                // ->setAdditionalInformation($this->fetch('module:SSLCOMMERZ/views/templates/hook/sslcommerz_intro.tpl'));
+                // ->setAdditionalInformation($this->trans(Configuration::get('SSLCOMMERZ_DETAILS')));
+                ->setAdditionalInformation($this->fetch('module:SSLCOMMERZ/views/templates/hook/easy_checkout.tpl'));
+        $newOption->setBinary(true);
         $payment_options = [
             $newOption,
         ];
 
         return $payment_options;
     }
+
+    // public function getTemplateVarInfos()
+    // {
+    //     return $this->display(__FILE__, 'infos.tpl');
+    // }
 
     public function checkCurrency($cart)
     {
@@ -324,107 +335,31 @@ class SSLCOMMERZ extends PaymentModule
         );
     }
 
-    public function data()
-    {   
+    public function getTemplateVars()
+    {
         global $cookie, $cart; 
-        if (!$this->active)
-        {
-            return;
-        }
+        $api_type = "";
+
         $cart = new Cart(intval($cookie->id_cart));
-        
-        // Buyer details
-        $customer = new Customer((int)($cart->id_customer));
-        
-        $toCurrency = new Currency(Currency::getIdByIsoCode('ZAR'));
-        $fromCurrency = new Currency((int)$cookie->id_currency);
-        $address = new Address(intval($cart->id_address_invoice));
-        $address_ship = new Address(intval($cart->id_address_delivery));
-        $total = $cart->getOrderTotal();
-        $currency = new Currency(intval($cart->id_currency));
-        $currency_iso_code = $currency->iso_code;
-        $pfAmount = Tools::convertPriceFull( $total, $fromCurrency, $toCurrency );
-       
-        $data = array();
-
-        $currency = $this->getCurrency((int)$cart->id_currency);
-        if ($cart->id_currency != $currency->id)
+        $tran_id = $cart->id;
+        $sslc_mode = Configuration::get('MODE');
+        if($sslc_mode == 1)
         {
-            // If sslcommerz currency differs from local currency
-            $cart->id_currency = (int)$currency->id;
-            $cookie->id_currency = (int)$cart->id_currency;
-            $cart->update();
+            $api_type = "securepay";
         }
-        
-
-        // Use appropriate merchant identifiers
-        // Live
-        if( Configuration::get('sslcommerz_MODE') == 'live' )
-        {
-            $data['info']['store_id'] = Configuration::get('sslcommerz_MERCHANT_ID');
-            $data['info']['signature_key'] = Configuration::get('sslcommerz_MERCHANT_KEY');
-            $data['sslcommerz_url'] = 'https://securepay.sslcommerz.com/gwprocess/v3/process.php';
-        }
-        // Sandbox
         else
         {
-            $data['info']['store_id'] = Configuration::get('sslcommerz_MERCHANT_ID');
-            $data['sslcommerz_url'] = 'https://sandbox.sslcommerz.com/gwprocess/v3/process.php';
+            $api_type = "sandbox";
         }
-        $data['sslcommerz_paynow_text'] = Configuration::get('sslcommerz_PAYNOW_TEXT');        
-        $data['sslcommerz_paynow_logo'] = Configuration::get('sslcommerz_PAYNOW_LOGO');
-        $data['sslcommerz_paynow_align'] = Configuration::get('sslcommerz_PAYNOW_ALIGN');
-    
-        // Create URLs
-        $data['info']['value_a'] = $this->context->link->getPageLink( 'order-confirmation', null, null, 'key='.$cart->secure_key.'&id_cart='.(int)($cart->id).'&id_module='.(int)($this->id));
-        $data['info']['value_b'] = $this->context->link->getPageLink( 'order-confirmation', null, null, 'key='.$cart->secure_key.'&id_cart='.(int)($cart->id).'&id_module='.(int)($this->id));
 
-        $data['info']['success_url'] = Tools::getHttpHost( true ).__PS_BASE_URI__.'modules/sslcommerz/validation.php?itn_request=true';
-        $data['info']['fail_url'] = Tools::getHttpHost( true ).__PS_BASE_URI__.'modules/sslcommerz/validation.php?itn_request=true';
-
-        $data['info']['cancel_url'] = Tools::getHttpHost( true ).__PS_BASE_URI__;
-        $data['info']['ipn_url'] = Tools::getHttpHost( true ).__PS_BASE_URI__.'modules/sslcommerz/validation.php?itn_request=true';
-        
-        //AMOUNT AND CURRENCY OTHER
-        $data['info']['tran_id'] = $cart->id;
-        $data['info']['desc'] = Configuration::get('PS_SHOP_NAME') .' purchase, Cart Item ID #'. $cart->id; 
-        $data['info']['currency'] =  $currency_iso_code;
-        $data['info']['total_amount'] = number_format( sprintf( "%01.2f", $total ), 2, '.', '' );
-        
-        //Billing Information 
-        $data['info']['cus_name'] = $customer->firstname.' '.$customer->lastname;
-        $data['info']['cus_email'] = $customer->email;      
-        $data['info']['cus_add1'] = $address->address1;  
-        $data['info']['cus_add2'] = $address->address2;  
-        $data['info']['cus_city'] = $address->city;  
-        $data['info']['cus_state'] = $customer->email;  
-        $data['info']['cus_postcode'] = $address->postcode;  
-        $data['info']['cus_country'] = $address->country; 
-        $data['info']['cus_phone'] = $address->phone; 
-        
-        //Shipping Information 
-        $data['info']['ship_name'] = $address_ship->firstname.' '.$address_ship->lastname;
-        $data['info']['ship_add1'] = $address_ship->address1;   
-        $data['info']['ship_add2'] = $address_ship->address2; 
-        $data['info']['ship_city'] = $address_ship->city; 
-        $data['info']['ship_state'] = $customer->email; 
-        $data['info']['ship_postcode'] = $address_ship->postcode;  
-        $data['info']['ship_country'] = $address_ship->country; 
-        return $data;
+        return [
+            'tran_id' => $tran_id,
+            'payment_options' => $this->name,
+            'details' => Tools::getValue('SSLCOMMERZ_DETAILS', Configuration::get('SSLCOMMERZ_DETAILS')),
+            'endpoint' => $this->context->link->getModuleLink($this->name, 'request', array(), true),
+            'api_type' => $api_type,
+        ];
     }
-
-    // public function getTemplateVarInfos()
-    // {
-
-    //     $SslcommerzCustomText = Tools::nl2br(Configuration::get('SSLCOMMERZ_DETAILS'));
-    //     if (false === $SslcommerzCustomText) {
-    //         $SslcommerzCustomText = '';
-    //     }
-
-    //     return array(
-    //         'SslcommerzCustomText' => $SslcommerzCustomText,
-    //     );
-    // }
 
 }
 

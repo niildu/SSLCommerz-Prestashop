@@ -65,6 +65,7 @@ class SslcommerzRequestModuleFrontController extends ModuleFrontController
 			$data['ship_state'] = $customer->email; 
 			$data['ship_postcode'] = $address_ship->postcode;  
 			$data['ship_country'] = $address_ship->country; 
+			$ship = "YES";
 		} else {
 			$data['ship_name'] = '';
 			$data['ship_add1'] = '';
@@ -73,6 +74,7 @@ class SslcommerzRequestModuleFrontController extends ModuleFrontController
 			$data['ship_state'] = '';
 			$data['ship_postcode'] = '';
 			$data['ship_country'] = '';
+			$ship = "NO";
 		}
               
             //   validation
@@ -80,6 +82,13 @@ class SslcommerzRequestModuleFrontController extends ModuleFrontController
 		$data['success_url'] = $this->context->link->getModuleLink('SSLCOMMERZ', 'validation', array(), true);
 		$data['fail_url'] = $this->context->link->getModuleLink('SSLCOMMERZ', 'validation', array(), true);
 		$data['cancel_url'] = $this->context->link->getModuleLink('SSLCOMMERZ', 'validation', array(), true);
+		$data['ipn_url'] = $this->context->link->getModuleLink('SSLCOMMERZ', 'ipn', array(), true);
+
+		$data['shipping_method']   = $ship;
+    	$data['num_of_item']       = "0";
+    	$data['product_name']      = "cartproduct";
+    	$data['product_category']  = 'Ecommerce';
+    	$data['product_profile']   = 'general';
        
 		////Hash Key Gernarate For SSL
 		$security_key = $this->sslcommerz_hash_key(Configuration::get('SSLCOMMERZ_STORE_PASSWORD'), $data);
@@ -87,26 +96,21 @@ class SslcommerzRequestModuleFrontController extends ModuleFrontController
 		$data['verify_sign'] = $security_key['verify_sign'];
         $data['verify_key'] = $security_key['verify_key'];
         
-        
         $objOrder = new Order($cart->id);
         $history = new OrderHistory();
         $history->id_order = (int)$objOrder->id;
         $history->id_order;
         
-    //     if (is_null($context->cart->id)) 
-	//     {
-    //         $context->cart->add();
-    //         $cookie->__set('id_cart', $context->cart->id);
-    //     }
-        
         $sslc_mode = Configuration::get('MODE');
         if( $sslc_mode == 1 )
         {
-            $redirect_url = 'https://securepay.sslcommerz.com/gwprocess/v3/api.php';
+            $redirect_url = 'https://securepay.sslcommerz.com/gwprocess/v4/api.php';
+            $api_type = "securepay";
         }
         else
         {
-            $redirect_url = 'https://sandbox.sslcommerz.com/gwprocess/v3/api.php';
+            $redirect_url = 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php';
+            $api_type = "sandbox";
         }
         
         $handle = curl_init();
@@ -119,9 +123,6 @@ class SslcommerzRequestModuleFrontController extends ModuleFrontController
 		$content = curl_exec($handle );
 		$code = curl_getinfo($handle, CURLINFO_HTTP_CODE);
 		
-// 		echo "<pre>";
-// 		print_r($cart);
-// 		exit;
 		
 		if($code == 200 && !( curl_errno($handle))) 
 		{
@@ -130,6 +131,7 @@ class SslcommerzRequestModuleFrontController extends ModuleFrontController
 		  
 			# PARSE THE JSON RESPONSE
 		  	$sslcz = json_decode($sslcommerzResponse, true );
+
 		  	if($sslcz['status']=='SUCCESS')
 		  	{
 		  	   // echo Configuration::get('PS_OS_PAYMENT')."------".$sslcommerz->displayName."----".$cart->id."----".$customer->secure_key;exit;
@@ -150,21 +152,28 @@ class SslcommerzRequestModuleFrontController extends ModuleFrontController
                         false,
                         $customer->secure_key
                     );
-                    // header("Location: " . $this->sslc_data['GatewayPageURL']);
                     
-                    echo "
-                        <script>
-                            window.location.href = '" . $sslcz['GatewayPageURL'] . "';
-                        </script>
-                    ";
-                    
-                    exit;
+                    if($api_type == "securepay")
+            		{
+            			echo json_encode(['status' => 'SUCCESS', 'data' => $sslcz['GatewayPageURL'], 'logo' => $sslcz['storeLogo'] ]);
+            			exit;
+            		}
+            		else if($api_type == "sandbox")
+            		{
+            			echo json_encode(['status' => 'success', 'data' => $sslcz['GatewayPageURL'], 'logo' => $sslcz['storeLogo'] ]);
+            			exit;
+            		}
+            		else {
+		        	   echo json_encode(['status' => 'FAILED', 'data' => NULL, 'message' => $sslcz['failedreason'] ]);
+		        	   exit;
+		        	}
+
                 } 
-                else 
-                {
-                    $this->error = "No redirect URL found!";
-                    return $this->error;
-                }
+                else
+				{
+					echo "CURL not activate!";
+					exit;
+				}
             }
 		}
 	 	else if($sslcz['status']=='FAILED')

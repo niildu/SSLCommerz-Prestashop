@@ -23,10 +23,33 @@
 *  International Registered Trademark & Property of PrestaShop SA
 *}
 
-<div class="alert alert-info">
-<img src="../modules/SSLCOMMERZ/logo.png" style="float:left; margin-right:15px;" height="60">
-<p><strong>{l s="This module allows you to accept secure payments by SSLCOMMERZ." d='Modules.SSLCOMMERZ.Admin'}</strong></p>
-<p>{l s="If the client chooses to pay by SSLCOMMERZ, Initially the order status will change to 'Processing in progress'." d='Modules.SSLCOMMERZ.Admin'}</p>
-<p>{l s="Final status will be 'Payment accepted' if everything all right." d='Modules.SSLCOMMERZ.Admin'}</p>
-<p>{l s="Set IPN URL to your merchant panel for updating payment without any interruption." d='Modules.SSLCOMMERZ.Admin'}</p>
-</div>
+<p>{$details}</p>
+<button disabled="" class="btn btn-primary center-block" id="sslczPayBtn" token="{$tran_id}" postdata="" order="{$tran_id}" endpoint="{$endpoint}">Order with SSLCOMMERZ
+</button>
+
+<script type="text/javascript">
+	var api_type = "{$api_type}";
+	if (api_type == 'sandbox') {
+		var url = "https://sandbox.sslcommerz.com/embed.min.js?";
+	} 
+	else { 
+		var url = "https://seamless-epay.sslcommerz.com/embed.min.js?";
+	}
+	
+	(function (window, document) {
+	var loader = function () {
+	    var script = document.createElement("script"), tag = document.getElementsByTagName("script")[0];
+	    script.src =  url+ Math.random().toString(36).substring(7);
+	    tag.parentNode.insertBefore(script, tag);
+	};
+
+	window.addEventListener ? window.addEventListener("load", loader, false) : window.attachEvent("onload", loader);
+})(window, document);
+</script>
+
+
+
+
+
+
+
