@@ -141,17 +141,17 @@ class SslcommerzRequestModuleFrontController extends ModuleFrontController
              
                 if(isset($sslcz['GatewayPageURL']) && $sslcz['GatewayPageURL'] != '') 
                 {
-                    $result = $this->module->validateOrder(
-                        $cart->id,
-                        Configuration::get('PS_OS_PREPARATION'),
-                        $total,
-                        $this->module->displayName,
-                        NULL,
-                        array(),
-                        intval($currency->id),
-                        false,
-                        $customer->secure_key
-                    );
+                    //$result = $this->module->validateOrder(
+                    //    $cart->id,
+                    //    Configuration::get('PS_OS_PREPARATION'),
+                    //    $total,
+                    //    $this->module->displayName,
+                    //    NULL,
+                    //    array(),
+                    //    intval($currency->id),
+                    //    false,
+                    //    $customer->secure_key
+                    //);
                     
                     if($api_type == "securepay")
             		{
